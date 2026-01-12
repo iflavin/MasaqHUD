@@ -1,0 +1,43 @@
+# Build artifacts
+.build/
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+build/
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Xcode
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Environment and secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Logs
+*.log
+
+# Test output
+.testoutput/

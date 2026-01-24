@@ -23,8 +23,7 @@ final class NetworkMetrics {
     private var previousBytesOut: UInt64 = 0
     private var previousTimestamp: Date?
     private var cachedPublicIP: String = "Disabled"
-    private var publicIPLastFetch: Date?
-    private let publicIPRefreshInterval: TimeInterval = 300
+    private var publicIPTask: Task<Void, Never>?
 
     /// Set to true to enable public IP fetching (requires network access)
     var enablePublicIP: Bool = false {
@@ -67,12 +66,9 @@ final class NetworkMetrics {
         previousBytesOut = bytesOut
         previousTimestamp = now
 
-        // Refresh public IP periodically if enabled
+        // Refresh public IP on each call when enabled
         if enablePublicIP {
-            if let lastFetch = publicIPLastFetch,
-               now.timeIntervalSince(lastFetch) > publicIPRefreshInterval {
-                fetchPublicIPAsync()
-            }
+            fetchPublicIPAsync()
         }
 
         return NetworkUsage(
@@ -174,20 +170,19 @@ final class NetworkMetrics {
     }
 
     private func fetchPublicIPAsync() {
-        publicIPLastFetch = Date()
-
-        Task {
+        publicIPTask?.cancel()
+        publicIPTask = Task { [weak self] in
             do {
                 let url = URL(string: "https://api.ipify.org")!
                 let (data, _) = try await URLSession.shared.data(from: url)
                 if let ip = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
-                    await MainActor.run {
-                        self.cachedPublicIP = ip
+                    await MainActor.run { [weak self] in
+                        self?.cachedPublicIP = ip
                     }
                 }
             } catch {
-                await MainActor.run {
-                    self.cachedPublicIP = "N/A"
+                await MainActor.run { [weak self] in
+                    self?.cachedPublicIP = "N/A"
                 }
             }
         }

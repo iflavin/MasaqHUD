@@ -57,6 +57,9 @@ final class ConfigEngine {
         // Reset config for fresh load
         configData = HUDConfig()
 
+        // Clear old context's exception handler to help GC release it properly
+        context.exceptionHandler = nil
+
         // Create fresh JSContext to prevent memory accumulation from repeated hot-reloads
         context = JSContext()!
         context.exceptionHandler = { _, exception in

@@ -31,6 +31,10 @@ final class TextRenderer {
     // Font cache to avoid repeated allocations
     private var fontCache: [FontCacheKey: NSFont] = [:]
 
+    func clearCache() {
+        fontCache.removeAll()
+    }
+
     private struct FontCacheKey: Hashable {
         let fontName: String?
         let fontSize: CGFloat

@@ -15,7 +15,7 @@ enum Command: String {
 }
 
 struct CLI {
-    static let version = "0.5.0"
+    static let version = appVersion
     static let configDir = NSHomeDirectory() + "/.config/masaqhud"
     static let configPath = configDir + "/masaqhud.js"
     static let pidFile = configDir + "/masaqhud.pid"

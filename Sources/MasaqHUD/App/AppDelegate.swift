@@ -194,13 +194,17 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         fileWatcher?.setEventHandler { [weak self] in
+            guard let self = self else { return }
             // Debounce config reloads - wait 0.5s after last change
-            self?.configReloadWorkItem?.cancel()
+            self.configReloadWorkItem?.cancel()
+            self.configReloadWorkItem = nil  // Explicitly release cancelled work item
+
             let workItem = DispatchWorkItem { [weak self] in
+                self?.configReloadWorkItem = nil  // Clear after execution
                 print("Config file changed, reloading...")
                 self?.loadConfig()
             }
-            self?.configReloadWorkItem = workItem
+            self.configReloadWorkItem = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
         }
 

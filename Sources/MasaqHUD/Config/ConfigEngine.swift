@@ -616,9 +616,11 @@ final class ConfigEngine {
         let timeoutSeconds: Double = 5.0
         var timedOut = false
 
+        // Use weak reference to process so cancelled work items don't retain it
+        weak let weakProcess = process
         let timeoutWorkItem = DispatchWorkItem {
             timedOut = true
-            process.terminate()
+            weakProcess?.terminate()
         }
 
         DispatchQueue.global().asyncAfter(

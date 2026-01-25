@@ -27,9 +27,12 @@ private func IOHIDServiceClientCopyEvent(_ service: IOHIDServiceClientRef, _ typ
 @_silgen_name("IOHIDEventGetFloatValue")
 private func IOHIDEventGetFloatValue(_ event: IOHIDEventRef, _ field: Int32) -> Double
 
-// Release function for IOHIDEvent (needed since IOHIDEventRef is OpaquePointer)
+// Release functions (needed since OpaquePointer types bypass Swift's automatic CF memory management)
 @_silgen_name("CFRelease")
 private func IOHIDEventRelease(_ event: IOHIDEventRef)
+
+@_silgen_name("CFRelease")
+private func IOHIDEventSystemClientRelease(_ client: IOHIDEventSystemClientRef)
 
 // Event type for temperature
 private let kIOHIDEventTypeTemperature: Int64 = 15
@@ -51,6 +54,12 @@ final class AppleSiliconThermal {
 
     init() {
         setupClient()
+    }
+
+    deinit {
+        if let client = client {
+            IOHIDEventSystemClientRelease(client)
+        }
     }
 
     private func setupClient() {

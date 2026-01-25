@@ -66,6 +66,7 @@ final class OverlayView: NSView {
         self.configEngine = configEngine
         self.imageCache.removeAll()
         self.imageCacheOrder.removeAll()
+        self.graphHistory.removeAll()
         self.needsDisplay = true
     }
 

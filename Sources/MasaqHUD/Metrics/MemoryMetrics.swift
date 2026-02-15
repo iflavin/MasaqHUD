@@ -12,9 +12,11 @@ struct MemoryUsage {
 
 final class MemoryMetrics {
     private let pageSize: Double
+    private let hostPort: mach_port_t
 
     init() {
         self.pageSize = Double(vm_kernel_page_size)
+        self.hostPort = mach_host_self()
     }
 
     func getUsage() -> MemoryUsage {
@@ -23,7 +25,7 @@ final class MemoryMetrics {
 
         let result = withUnsafeMutablePointer(to: &stats) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count)
+                host_statistics64(hostPort, HOST_VM_INFO64, $0, &count)
             }
         }
 

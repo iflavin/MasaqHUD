@@ -16,13 +16,16 @@ final class CPUMetrics {
     private var previousTicks: (user: UInt64, system: UInt64, idle: UInt64, nice: UInt64)?
     private var previousPerCoreTicks: [[UInt64]] = []
     private let coreCount: Int
+    private let hostPort: mach_port_t
 
     init() {
+        hostPort = mach_host_self()
+
         var count: natural_t = 0
         var cpuInfo: processor_info_array_t?
         var numCpuInfo: mach_msg_type_number_t = 0
 
-        let result = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &count, &cpuInfo, &numCpuInfo)
+        let result = host_processor_info(hostPort, PROCESSOR_CPU_LOAD_INFO, &count, &cpuInfo, &numCpuInfo)
         if result == KERN_SUCCESS {
             coreCount = Int(count)
             if let info = cpuInfo {
@@ -39,7 +42,7 @@ final class CPUMetrics {
 
         let result = withUnsafeMutablePointer(to: &cpuLoadInfo) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO, $0, &count)
+                host_statistics(hostPort, HOST_CPU_LOAD_INFO, $0, &count)
             }
         }
 
@@ -86,7 +89,7 @@ final class CPUMetrics {
         var cpuInfo: processor_info_array_t?
         var numCpuInfo: mach_msg_type_number_t = 0
 
-        let result = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &numCPUs, &cpuInfo, &numCpuInfo)
+        let result = host_processor_info(hostPort, PROCESSOR_CPU_LOAD_INFO, &numCPUs, &cpuInfo, &numCpuInfo)
 
         guard result == KERN_SUCCESS, let info = cpuInfo else {
             return []

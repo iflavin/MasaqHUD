@@ -16,10 +16,10 @@ private func IOHIDEventSystemClientCreate(_ allocator: CFAllocator?) -> IOHIDEve
 private func IOHIDEventSystemClientSetMatching(_ client: IOHIDEventSystemClientRef, _ matching: CFDictionary?)
 
 @_silgen_name("IOHIDEventSystemClientCopyServices")
-private func IOHIDEventSystemClientCopyServices(_ client: IOHIDEventSystemClientRef) -> CFArray?
+private func IOHIDEventSystemClientCopyServices(_ client: IOHIDEventSystemClientRef) -> Unmanaged<CFArray>?
 
 @_silgen_name("IOHIDServiceClientCopyProperty")
-private func IOHIDServiceClientCopyProperty(_ service: IOHIDServiceClientRef, _ key: CFString) -> CFTypeRef?
+private func IOHIDServiceClientCopyProperty(_ service: IOHIDServiceClientRef, _ key: CFString) -> Unmanaged<CFTypeRef>?
 
 @_silgen_name("IOHIDServiceClientCopyEvent")
 private func IOHIDServiceClientCopyEvent(_ service: IOHIDServiceClientRef, _ type: Int64, _ matching: CFDictionary?, _ options: Int64) -> IOHIDEventRef?
@@ -84,7 +84,7 @@ final class AppleSiliconThermal {
             return []
         }
 
-        guard let services = IOHIDEventSystemClientCopyServices(client) else {
+        guard let services = IOHIDEventSystemClientCopyServices(client)?.takeRetainedValue() else {
             return []
         }
 
@@ -99,7 +99,7 @@ final class AppleSiliconThermal {
 
             // Get the sensor name
             var name = "sensor\(i)"
-            if let nameRef = IOHIDServiceClientCopyProperty(serviceRef, "Product" as CFString),
+            if let nameRef = IOHIDServiceClientCopyProperty(serviceRef, "Product" as CFString)?.takeRetainedValue(),
                let n = nameRef as? String {
                 name = n
             }
@@ -124,9 +124,7 @@ final class AppleSiliconThermal {
     }
 
     /// Get CPU temperature by finding the most relevant CPU thermal sensor
-    func getCPUTemperature() -> Double? {
-        let readings = getAllTemperatures()
-
+    func getCPUTemperature(from readings: [ThermalReading]) -> Double? {
         // Priority order for CPU temperature sensors on Apple Silicon
         // SOC MTR Temp is usually the main die temperature
         // pACC = performance cores, eACC = efficiency cores
@@ -153,9 +151,7 @@ final class AppleSiliconThermal {
     }
 
     /// Get GPU temperature by finding GPU-specific thermal sensor
-    func getGPUTemperature() -> Double? {
-        let readings = getAllTemperatures()
-
+    func getGPUTemperature(from readings: [ThermalReading]) -> Double? {
         // Look for GPU-specific sensors
         let gpuPatterns = [
             "GPU MTR Temp",
@@ -175,8 +171,9 @@ final class AppleSiliconThermal {
 
     /// Get temperatures suitable for the existing TemperatureInfo structure
     func getTemperatures() -> TemperatureInfo {
-        let cpuTemp = getCPUTemperature() ?? 0
-        let gpuTemp = getGPUTemperature() ?? 0
+        let readings = getAllTemperatures()
+        let cpuTemp = getCPUTemperature(from: readings) ?? 0
+        let gpuTemp = getGPUTemperature(from: readings) ?? 0
 
         return TemperatureInfo(cpuTemp: cpuTemp, gpuTemp: gpuTemp)
     }

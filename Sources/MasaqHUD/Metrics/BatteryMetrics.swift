@@ -85,10 +85,13 @@ final class BatteryMetrics {
             timeRemaining = "N/A"
         }
 
+        // Get all battery properties from IORegistry in a single lookup
+        let batteryProps = getAllBatteryProperties()
+
         // Power draw (amperage * voltage)
         // Note: These may not be available on all systems
-        let amperage = getBatteryProperty("CurrentCapacity") ?? 0
-        let voltage = getBatteryProperty("Voltage") ?? 0
+        let amperage = batteryProps["CurrentCapacity"] ?? 0
+        let voltage = batteryProps["Voltage"] ?? 0
         var powerDraw = 0.0
         if voltage > 0 {
             // Amperage is in mA, voltage in mV
@@ -96,9 +99,9 @@ final class BatteryMetrics {
         }
 
         // Cycle count and health from IORegistry
-        let cycleCount = getBatteryProperty("CycleCount") ?? 0
-        let designCapacity = getBatteryProperty("DesignCapacity") ?? 0
-        let actualMaxCapacity = getBatteryProperty("MaxCapacity") ?? designCapacity
+        let cycleCount = batteryProps["CycleCount"] ?? 0
+        let designCapacity = batteryProps["DesignCapacity"] ?? 0
+        let actualMaxCapacity = batteryProps["MaxCapacity"] ?? designCapacity
         let health = designCapacity > 0 ? (actualMaxCapacity * 100) / designCapacity : 100
 
         return BatteryInfo(
@@ -112,22 +115,32 @@ final class BatteryMetrics {
         )
     }
 
-    private func getBatteryProperty(_ property: String) -> Int? {
+    private static let batteryPropertyKeys = [
+        "CurrentCapacity", "Voltage", "CycleCount", "DesignCapacity", "MaxCapacity"
+    ]
+
+    /// Fetch all needed battery properties from IORegistry in a single lookup.
+    private func getAllBatteryProperties() -> [String: Int] {
         let service = IOServiceGetMatchingService(
             kIOMainPortDefault,
             IOServiceMatching("AppleSmartBattery")
         )
 
-        guard service != 0 else { return nil }
+        guard service != 0 else { return [:] }
         defer { IOObjectRelease(service) }
 
         var props: Unmanaged<CFMutableDictionary>?
         guard IORegistryEntryCreateCFProperties(service, &props, kCFAllocatorDefault, 0) == KERN_SUCCESS,
-              let dict = props?.takeRetainedValue() as? [String: Any],
-              let value = dict[property] as? Int else {
-            return nil
+              let dict = props?.takeRetainedValue() as? [String: Any] else {
+            return [:]
         }
 
-        return value
+        var result: [String: Int] = [:]
+        for key in Self.batteryPropertyKeys {
+            if let value = dict[key] as? Int {
+                result[key] = value
+            }
+        }
+        return result
     }
 }

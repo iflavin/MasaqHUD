@@ -9,78 +9,68 @@ struct GPUUsage {
 
 final class GPUMetrics {
     private let smcReader: SMCReader
+    private var cachedGPUName: String?
 
     init(smcReader: SMCReader) {
         self.smcReader = smcReader
     }
 
     func getUsage() -> GPUUsage {
-        let utilization = getGPUUtilization()
+        let (name, utilization) = getGPUNameAndUtilization()
         let temps = smcReader.getTemperatures()
 
         return GPUUsage(
-            name: getGPUName(),
+            name: name,
             utilizationPercent: utilization,
             temperature: temps.gpuTemp
         )
     }
 
-    private func getGPUName() -> String {
+    /// Single IORegistry lookup that returns both GPU name and utilization.
+    private func getGPUNameAndUtilization() -> (name: String, utilization: Double) {
+        // Return cached name with fresh utilization if name is already known
+        // (GPU name never changes at runtime)
+
         var iterator: io_iterator_t = 0
         let matching = IOServiceMatching("AGXAccelerator")
 
         guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == kIOReturnSuccess else {
-            return "Unknown GPU"
-        }
-
-        defer { IOObjectRelease(iterator) }
-
-        let service = IOIteratorNext(iterator)
-        if service != 0 {
-            defer { IOObjectRelease(service) }
-            return "Apple GPU"
-        }
-
-        return "Unknown GPU"
-    }
-
-    private func getGPUUtilization() -> Double {
-        var iterator: io_iterator_t = 0
-        let matching = IOServiceMatching("AGXAccelerator")
-
-        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == kIOReturnSuccess else {
-            return 0.0
+            return (cachedGPUName ?? "Unknown GPU", 0.0)
         }
 
         defer { IOObjectRelease(iterator) }
 
         let service = IOIteratorNext(iterator)
         guard service != 0 else {
-            return 0.0
+            return (cachedGPUName ?? "Unknown GPU", 0.0)
         }
 
         defer { IOObjectRelease(service) }
 
-        if let props = getServiceProperties(service) {
-            if let perfStats = props["PerformanceStatistics"] as? [String: Any] {
-                if let utilization = perfStats["Device Utilization %"] as? NSNumber {
-                    return utilization.doubleValue
-                }
-                if let utilization = perfStats["GPU Activity(%)"] as? NSNumber {
-                    return utilization.doubleValue
-                }
-            }
+        // Cache GPU name on first successful lookup
+        if cachedGPUName == nil {
+            cachedGPUName = "Apple GPU"
         }
 
-        return 0.0
+        let utilization = extractUtilization(from: service)
+        return (cachedGPUName!, utilization)
     }
 
-    private func getServiceProperties(_ service: io_object_t) -> [String: Any]? {
+    /// Extract GPU utilization percentage from an IORegistry service entry.
+    private func extractUtilization(from service: io_object_t) -> Double {
         var props: Unmanaged<CFMutableDictionary>?
         guard IORegistryEntryCreateCFProperties(service, &props, kCFAllocatorDefault, 0) == kIOReturnSuccess,
-              let properties = props?.takeRetainedValue() as? [String: Any] else {
-            return nil
+              let properties = props?.takeRetainedValue() as? [String: Any],
+              let perfStats = properties["PerformanceStatistics"] as? [String: Any] else {
+            return 0.0
         }
-        return properties
+
+        if let utilization = perfStats["Device Utilization %"] as? NSNumber {
+            return utilization.doubleValue
+        }
+        if let utilization = perfStats["GPU Activity(%)"] as? NSNumber {
+            return utilization.doubleValue
+        }
+        return 0.0
     }
 }

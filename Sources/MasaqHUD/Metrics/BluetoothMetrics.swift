@@ -14,8 +14,23 @@ struct BluetoothInfo {
 }
 
 final class BluetoothMetrics {
+    private var cachedInfo: BluetoothInfo?
+    private var lastFetchTime: Date?
+    private let cacheTTL: TimeInterval = 5
 
     func getInfo() -> BluetoothInfo {
+        if let cachedInfo, let lastFetchTime,
+           Date().timeIntervalSince(lastFetchTime) < cacheTTL {
+            return cachedInfo
+        }
+
+        let info = fetchInfo()
+        cachedInfo = info
+        lastFetchTime = Date()
+        return info
+    }
+
+    private func fetchInfo() -> BluetoothInfo {
         // Check if Bluetooth is powered on
         guard let hostController = IOBluetoothHostController.default() else {
             return BluetoothInfo(connectedCount: 0, devices: [], isPoweredOn: false)

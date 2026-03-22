@@ -16,29 +16,39 @@ struct ProcessCounts {
 final class ProcessMetrics {
     private var previousCPUTimes: [Int32: (user: UInt64, system: UInt64, timestamp: TimeInterval)] = [:]
 
-    func getTopProcesses(byCPU cpuCount: Int = 5, byMemory memCount: Int = 5) -> (cpu: [ProcessInfoData], memory: [ProcessInfoData]) {
-        var processes: [ProcessInfoData] = []
-
+    /// Combined method that fetches top processes and process counts from a single sysctl call.
+    func getTopProcessesAndCounts(
+        byCPU cpuCount: Int = 5,
+        byMemory memCount: Int = 5
+    ) -> (cpu: [ProcessInfoData], memory: [ProcessInfoData], counts: ProcessCounts) {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
         var size: Int = 0
 
         guard sysctl(&mib, 4, nil, &size, nil, 0) == 0 else {
-            return ([], [])
+            return ([], [], ProcessCounts(total: 0, running: 0))
         }
 
         let count = size / MemoryLayout<kinfo_proc>.stride
         var procList = [kinfo_proc](repeating: kinfo_proc(), count: count)
 
         guard sysctl(&mib, 4, &procList, &size, nil, 0) == 0 else {
-            return ([], [])
+            return ([], [], ProcessCounts(total: 0, running: 0))
         }
 
         let actualCount = size / MemoryLayout<kinfo_proc>.stride
         let currentTime = Date().timeIntervalSince1970
 
+        var processes: [ProcessInfoData] = []
+        var runningCount = 0
+
         for i in 0..<actualCount {
             let proc = procList[i]
             let pid = proc.kp_proc.p_pid
+
+            // Count running processes (SRUN = 2)
+            if proc.kp_proc.p_stat == 2 {
+                runningCount += 1
+            }
 
             if pid <= 0 { continue }
 
@@ -100,35 +110,18 @@ final class ProcessMetrics {
             .sorted { $0.memoryMB > $1.memoryMB }
             .prefix(memCount)
 
-        return (cpu: Array(topCPU), memory: Array(topMemory))
+        let counts = ProcessCounts(total: actualCount, running: runningCount)
+        return (cpu: Array(topCPU), memory: Array(topMemory), counts: counts)
+    }
+
+    /// Convenience wrapper for backward compatibility (used by warm-up loop)
+    func getTopProcesses(byCPU cpuCount: Int = 5, byMemory memCount: Int = 5) -> (cpu: [ProcessInfoData], memory: [ProcessInfoData]) {
+        let result = getTopProcessesAndCounts(byCPU: cpuCount, byMemory: memCount)
+        return (cpu: result.cpu, memory: result.memory)
     }
 
     func getProcessCounts() -> ProcessCounts {
-        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
-        var size: Int = 0
-
-        guard sysctl(&mib, 4, nil, &size, nil, 0) == 0 else {
-            return ProcessCounts(total: 0, running: 0)
-        }
-
-        let count = size / MemoryLayout<kinfo_proc>.stride
-        var procList = [kinfo_proc](repeating: kinfo_proc(), count: count)
-
-        guard sysctl(&mib, 4, &procList, &size, nil, 0) == 0 else {
-            return ProcessCounts(total: 0, running: 0)
-        }
-
-        let actualCount = size / MemoryLayout<kinfo_proc>.stride
-        var running = 0
-
-        for i in 0..<actualCount {
-            let stat = procList[i].kp_proc.p_stat
-            // SRUN = 2 (running), SIDL = 1 (idle/new)
-            if stat == 2 {
-                running += 1
-            }
-        }
-
-        return ProcessCounts(total: actualCount, running: running)
+        let result = getTopProcessesAndCounts(byCPU: 0, byMemory: 0)
+        return result.counts
     }
 }

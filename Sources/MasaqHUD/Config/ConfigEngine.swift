@@ -20,6 +20,18 @@ final class ConfigEngine {
         try? NSRegularExpression(pattern: #"\$\{exec\s+command="([^"]+)"\}"#)
     }()
 
+    // Per-frame cached variable dictionary (built once, used by all widgets)
+    private var cachedVariables: [String: String]?
+
+    // Whether variables have been injected into the JSContext for the current frame
+    private var variablesInjectedForFrame = false
+
+    // Cached compiled JS condition functions (cleared on config reload)
+    private var compiledConditions: [String: JSValue] = [:]
+
+    // Frame counter for periodic JS garbage collection
+    private var frameCount: UInt = 0
+
     // Cached static system info (doesn't change during runtime)
     private lazy var cachedSystemInfo: (kernel: String, machine: String, sysname: String, osVersion: String) = {
         var uts = utsname()
@@ -56,6 +68,7 @@ final class ConfigEngine {
 
         // Reset config for fresh load
         configData = HUDConfig()
+        compiledConditions.removeAll()
 
         // Clear old context's exception handler to help GC release it properly
         context.exceptionHandler = nil
@@ -313,14 +326,35 @@ final class ConfigEngine {
         return value.toString()
     }
 
+    /// Build and cache the variable dictionary for the current frame,
+    /// and inject variables into the JSContext once.
+    /// Call once before rendering all widgets, pair with endFrame() in defer.
+    func prepareForFrame(metrics: DisplayMetrics) {
+        let variables = buildVariableDictionary(metrics: metrics)
+        cachedVariables = variables
+        injectVariablesIntoContext(variables)
+        variablesInjectedForFrame = true
+    }
+
+    /// Clear per-frame state and run periodic JS garbage collection.
+    func endFrame() {
+        cachedVariables = nil
+        variablesInjectedForFrame = false
+
+        frameCount += 1
+        if frameCount % 30 == 0 {
+            JSGarbageCollect(context.jsGlobalContextRef)
+        }
+    }
+
     /// Expand variable placeholders like ${cpu.usage} with actual values
     /// Uses single-pass replacement to minimize string allocations
     func expandVariables(in text: String, metrics: DisplayMetrics) -> String {
         // Early exit if no variables present
         guard text.contains("${") else { return text }
 
-        // Build variable lookup dictionary
-        let variables = buildVariableDictionary(metrics: metrics)
+        // Use cached variables if available, otherwise build on demand
+        let variables = cachedVariables ?? buildVariableDictionary(metrics: metrics)
 
         // Handle file variables separately (opt-in feature)
         if configData.enableFileReading {
@@ -330,56 +364,77 @@ final class ConfigEngine {
         return expandAllVariables(in: text, variables: variables, expandFiles: false)
     }
 
-    /// Evaluate a condition expression using current metrics values
-    /// Returns true if condition passes or is nil/empty, false otherwise
+    /// Evaluate a condition expression using current metrics values.
+    /// Returns true if condition passes or is nil/empty, false otherwise.
     func evaluateCondition(_ condition: String?, metrics: DisplayMetrics) -> Bool {
         guard let condition = condition, !condition.isEmpty else { return true }
 
-        // Build variable dictionary for JavaScript evaluation
-        let variables = buildVariableDictionary(metrics: metrics)
-
-        // Build JavaScript object with all variables as properties
-        // Transform flat keys like "cpu.usage" into nested object cpu.usage
-        var jsSetup = "var __vars = {};\n"
-
-        for (key, value) in variables {
-            let parts = key.split(separator: ".")
-            if parts.count == 2 {
-                let objName = String(parts[0])
-                let propName = String(parts[1])
-                jsSetup += "__vars.\(objName) = __vars.\(objName) || {};\n"
-                // Try to parse as number, otherwise quote as string
-                if let numValue = Double(value) {
-                    jsSetup += "__vars.\(objName).\(propName) = \(numValue);\n"
-                } else {
-                    let escaped = value.replacingOccurrences(of: "\\", with: "\\\\")
-                                       .replacingOccurrences(of: "\"", with: "\\\"")
-                                       .replacingOccurrences(of: "\n", with: "\\n")
-                    jsSetup += "__vars.\(objName).\(propName) = \"\(escaped)\";\n"
-                }
-            } else {
-                // Single-part key (like "time", "hostname")
-                if let numValue = Double(value) {
-                    jsSetup += "__vars.\(key) = \(numValue);\n"
-                } else {
-                    let escaped = value.replacingOccurrences(of: "\\", with: "\\\\")
-                                       .replacingOccurrences(of: "\"", with: "\\\"")
-                                       .replacingOccurrences(of: "\n", with: "\\n")
-                    jsSetup += "__vars.\(key) = \"\(escaped)\";\n"
-                }
-            }
+        // If variables haven't been injected for this frame, do it now (fallback)
+        if !variablesInjectedForFrame {
+            let variables = cachedVariables ?? buildVariableDictionary(metrics: metrics)
+            injectVariablesIntoContext(variables)
         }
 
-        // Destructure to top-level for easy access in conditions
-        jsSetup += "var { cpu, memory, battery, disk, network, gpu, wifi, load, swap, top, processes, audio, bluetooth } = __vars;\n"
+        // Use cached compiled function if available, otherwise compile and cache
+        let function: JSValue
+        if let cached = compiledConditions[condition] {
+            function = cached
+        } else {
+            let script = "(function() { return Boolean(\(condition)); })"
+            guard let compiled = context.evaluateScript(script),
+                  !compiled.isUndefined else {
+                return true
+            }
+            compiledConditions[condition] = compiled
+            function = compiled
+        }
 
-        let script = jsSetup + "Boolean(\(condition))"
-
-        guard let result = context.evaluateScript(script), result.isBoolean else {
-            // On error, default to rendering the widget
+        guard let result = function.call(withArguments: []),
+              result.isBoolean else {
             return true
         }
         return result.toBool()
+    }
+
+    /// Inject the variable dictionary into the JSContext as nested JS objects.
+    /// Uses the JSC object API instead of building and parsing JavaScript strings.
+    private func injectVariablesIntoContext(_ variables: [String: String]) {
+        // Group flat keys like "cpu.usage" into nested objects
+        var groups: [String: [String: String]] = [:]
+        var topLevel: [String: String] = [:]
+
+        for (key, value) in variables {
+            let parts = key.split(separator: ".", maxSplits: 1)
+            if parts.count == 2 {
+                let groupName = String(parts[0])
+                let propName = String(parts[1])
+                groups[groupName, default: [:]][propName] = value
+            } else {
+                topLevel[key] = value
+            }
+        }
+
+        // Set grouped objects (cpu, memory, gpu, etc.) as top-level JS variables
+        for (groupName, props) in groups {
+            let jsObj = JSValue(newObjectIn: context)!
+            for (propName, value) in props {
+                if let numValue = Double(value) {
+                    jsObj.setObject(numValue, forKeyedSubscript: propName as NSString)
+                } else {
+                    jsObj.setObject(value, forKeyedSubscript: propName as NSString)
+                }
+            }
+            context.setObject(jsObj, forKeyedSubscript: groupName as NSString)
+        }
+
+        // Set top-level variables (time, date, hostname, etc.)
+        for (key, value) in topLevel {
+            if let numValue = Double(value) {
+                context.setObject(numValue, forKeyedSubscript: key as NSString)
+            } else {
+                context.setObject(value, forKeyedSubscript: key as NSString)
+            }
+        }
     }
 
     /// Build dictionary of all variable names to their values

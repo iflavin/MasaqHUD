@@ -122,6 +122,9 @@ final class OverlayView: NSView {
     }
 
     private func renderFromConfig(context: CGContext, config: HUDConfig, engine: ConfigEngine) {
+        engine.prepareForFrame(metrics: metrics)
+        defer { engine.endFrame() }
+
         // Calculate base position based on anchor
         let baseX: CGFloat
         let baseY: CGFloat
@@ -145,135 +148,137 @@ final class OverlayView: NSView {
         let defaultFontSize = config.fontSize
 
         for (_, widget) in config.widgets.enumerated() {
-            // Extract condition from widget and check if it should render
-            let condition: String?
-            switch widget {
-            case .text(let c): condition = c.condition
-            case .graph(let c): condition = c.condition
-            case .bar(let c): condition = c.condition
-            case .hr(let c): condition = c.condition
-            case .gauge(let c): condition = c.condition
-            case .image(let c): condition = c.condition
-            }
-
-            // Skip rendering if condition evaluates to false
-            if !engine.evaluateCondition(condition, metrics: metrics) {
-                continue
-            }
-
-            switch widget {
-            case .text(let textConfig):
-                let x = baseX + textConfig.position.x
-                let y = baseY - textConfig.position.y
-
-                let expandedText = engine.expandVariables(in: textConfig.text, metrics: metrics)
-                let color = textConfig.color.flatMap { parseColor($0) } ?? defaultColor
-                let fontSize = textConfig.fontSize ?? defaultFontSize
-                let fontWeight = textConfig.weight.flatMap { FontWeight(rawValue: $0) } ?? .regular
-                let opacity = CGFloat(textConfig.opacity ?? 1.0)
-
-                var shadow: NSShadow?
-                if let shadowConfig = textConfig.shadow {
-                    let nsShadow = NSShadow()
-                    nsShadow.shadowColor = parseColor(shadowConfig.color) ?? NSColor.black
-                    nsShadow.shadowOffset = NSSize(width: shadowConfig.offsetX, height: -shadowConfig.offsetY)
-                    nsShadow.shadowBlurRadius = CGFloat(shadowConfig.blur)
-                    shadow = nsShadow
+            autoreleasepool {
+                // Extract condition from widget and check if it should render
+                let condition: String?
+                switch widget {
+                case .text(let c): condition = c.condition
+                case .graph(let c): condition = c.condition
+                case .bar(let c): condition = c.condition
+                case .hr(let c): condition = c.condition
+                case .gauge(let c): condition = c.condition
+                case .image(let c): condition = c.condition
                 }
 
-                renderer.drawText(
-                    context: context,
-                    text: expandedText,
-                    x: x,
-                    y: y,
-                    fontSize: fontSize,
-                    color: color,
-                    fontName: textConfig.fontName,
-                    weight: fontWeight,
-                    italic: textConfig.italic,
-                    opacity: opacity,
-                    shadow: shadow,
-                    alignment: textConfig.alignment ?? "left"
-                )
+                // Skip rendering if condition evaluates to false
+                if !engine.evaluateCondition(condition, metrics: metrics) {
+                    return
+                }
 
-            case .graph(let graphConfig):
-                let x = baseX + graphConfig.position.x
-                let y = baseY - graphConfig.position.y
-                let color = graphConfig.color.flatMap { parseColor($0) } ?? defaultColor
-                let history = graphHistory[graphConfig.source] ?? []
+                switch widget {
+                case .text(let textConfig):
+                    let x = baseX + textConfig.position.x
+                    let y = baseY - textConfig.position.y
 
-                drawGraph(
-                    context: context,
-                    x: x,
-                    y: y,
-                    width: graphConfig.size.width,
-                    height: graphConfig.size.height,
-                    values: history,
-                    color: color
-                )
+                    let expandedText = engine.expandVariables(in: textConfig.text, metrics: metrics)
+                    let color = textConfig.color.flatMap { parseColor($0) } ?? defaultColor
+                    let fontSize = textConfig.fontSize ?? defaultFontSize
+                    let fontWeight = textConfig.weight.flatMap { FontWeight(rawValue: $0) } ?? .regular
+                    let opacity = CGFloat(textConfig.opacity ?? 1.0)
 
-            case .bar(let barConfig):
-                let x = baseX + barConfig.position.x
-                let y = baseY - barConfig.position.y
-                let color = barConfig.color.flatMap { parseColor($0) } ?? defaultColor
-                let bgColor = barConfig.backgroundColor.flatMap { parseColor($0) } ?? NSColor(white: 0.2, alpha: 0.5)
-                let value = getMetricValue(source: barConfig.source)
+                    var shadow: NSShadow?
+                    if let shadowConfig = textConfig.shadow {
+                        let nsShadow = NSShadow()
+                        nsShadow.shadowColor = parseColor(shadowConfig.color) ?? NSColor.black
+                        nsShadow.shadowOffset = NSSize(width: shadowConfig.offsetX, height: -shadowConfig.offsetY)
+                        nsShadow.shadowBlurRadius = CGFloat(shadowConfig.blur)
+                        shadow = nsShadow
+                    }
 
-                drawBar(
-                    context: context,
-                    x: x,
-                    y: y,
-                    width: barConfig.width,
-                    height: barConfig.height,
-                    value: value,
-                    color: color,
-                    backgroundColor: bgColor
-                )
+                    renderer.drawText(
+                        context: context,
+                        text: expandedText,
+                        x: x,
+                        y: y,
+                        fontSize: fontSize,
+                        color: color,
+                        fontName: textConfig.fontName,
+                        weight: fontWeight,
+                        italic: textConfig.italic,
+                        opacity: opacity,
+                        shadow: shadow,
+                        alignment: textConfig.alignment ?? "left"
+                    )
 
-            case .hr(let hrConfig):
-                let x = baseX + hrConfig.position.x
-                let y = baseY - hrConfig.position.y
-                let color = hrConfig.color.flatMap { parseColor($0) } ?? defaultColor
+                case .graph(let graphConfig):
+                    let x = baseX + graphConfig.position.x
+                    let y = baseY - graphConfig.position.y
+                    let color = graphConfig.color.flatMap { parseColor($0) } ?? defaultColor
+                    let history = graphHistory[graphConfig.source] ?? []
 
-                drawHorizontalRule(
-                    context: context,
-                    x: x,
-                    y: y,
-                    width: hrConfig.width,
-                    color: color
-                )
+                    drawGraph(
+                        context: context,
+                        x: x,
+                        y: y,
+                        width: graphConfig.size.width,
+                        height: graphConfig.size.height,
+                        values: history,
+                        color: color
+                    )
 
-            case .gauge(let gaugeConfig):
-                let x = baseX + gaugeConfig.position.x
-                let y = baseY - gaugeConfig.position.y
-                let color = gaugeConfig.color.flatMap { parseColor($0) } ?? defaultColor
-                let bgColor = gaugeConfig.backgroundColor.flatMap { parseColor($0) } ?? NSColor(white: 0.2, alpha: 0.5)
-                let value = getMetricValue(source: gaugeConfig.source)
+                case .bar(let barConfig):
+                    let x = baseX + barConfig.position.x
+                    let y = baseY - barConfig.position.y
+                    let color = barConfig.color.flatMap { parseColor($0) } ?? defaultColor
+                    let bgColor = barConfig.backgroundColor.flatMap { parseColor($0) } ?? NSColor(white: 0.2, alpha: 0.5)
+                    let value = getMetricValue(source: barConfig.source)
 
-                drawGauge(
-                    context: context,
-                    centerX: x + gaugeConfig.radius,
-                    centerY: y - gaugeConfig.radius,
-                    radius: gaugeConfig.radius,
-                    thickness: gaugeConfig.thickness,
-                    value: value,
-                    color: color,
-                    backgroundColor: bgColor,
-                    startAngle: gaugeConfig.startAngle,
-                    endAngle: gaugeConfig.endAngle
-                )
+                    drawBar(
+                        context: context,
+                        x: x,
+                        y: y,
+                        width: barConfig.width,
+                        height: barConfig.height,
+                        value: value,
+                        color: color,
+                        backgroundColor: bgColor
+                    )
 
-            case .image(let imageConfig):
-                let x = baseX + imageConfig.position.x
-                let y = baseY - imageConfig.position.y
+                case .hr(let hrConfig):
+                    let x = baseX + hrConfig.position.x
+                    let y = baseY - hrConfig.position.y
+                    let color = hrConfig.color.flatMap { parseColor($0) } ?? defaultColor
 
-                drawImage(
-                    context: context,
-                    path: imageConfig.path,
-                    x: x,
-                    y: y,
-                    size: imageConfig.size
-                )
+                    drawHorizontalRule(
+                        context: context,
+                        x: x,
+                        y: y,
+                        width: hrConfig.width,
+                        color: color
+                    )
+
+                case .gauge(let gaugeConfig):
+                    let x = baseX + gaugeConfig.position.x
+                    let y = baseY - gaugeConfig.position.y
+                    let color = gaugeConfig.color.flatMap { parseColor($0) } ?? defaultColor
+                    let bgColor = gaugeConfig.backgroundColor.flatMap { parseColor($0) } ?? NSColor(white: 0.2, alpha: 0.5)
+                    let value = getMetricValue(source: gaugeConfig.source)
+
+                    drawGauge(
+                        context: context,
+                        centerX: x + gaugeConfig.radius,
+                        centerY: y - gaugeConfig.radius,
+                        radius: gaugeConfig.radius,
+                        thickness: gaugeConfig.thickness,
+                        value: value,
+                        color: color,
+                        backgroundColor: bgColor,
+                        startAngle: gaugeConfig.startAngle,
+                        endAngle: gaugeConfig.endAngle
+                    )
+
+                case .image(let imageConfig):
+                    let x = baseX + imageConfig.position.x
+                    let y = baseY - imageConfig.position.y
+
+                    drawImage(
+                        context: context,
+                        path: imageConfig.path,
+                        x: x,
+                        y: y,
+                        size: imageConfig.size
+                    )
+                }
             }
         }
     }

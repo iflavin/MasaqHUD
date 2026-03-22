@@ -24,12 +24,15 @@ final class NetworkMetrics {
     private var previousTimestamp: Date?
     private var cachedPublicIP: String = "Disabled"
     private var publicIPTask: Task<Void, Never>?
+    private var lastPublicIPFetch: Date?
+    private let publicIPFetchInterval: TimeInterval = 300
 
     /// Set to true to enable public IP fetching (requires network access)
     var enablePublicIP: Bool = false {
         didSet {
             if enablePublicIP && !oldValue {
                 cachedPublicIP = "..."
+                lastPublicIPFetch = nil
                 fetchPublicIPAsync()
             } else if !enablePublicIP {
                 cachedPublicIP = "Disabled"
@@ -66,8 +69,9 @@ final class NetworkMetrics {
         previousBytesOut = bytesOut
         previousTimestamp = now
 
-        // Refresh public IP on each call when enabled
-        if enablePublicIP {
+        // Refresh public IP when enabled, throttled to once per fetch interval
+        if enablePublicIP && shouldFetchPublicIP(now: now) {
+            lastPublicIPFetch = now
             fetchPublicIPAsync()
         }
 
@@ -79,6 +83,13 @@ final class NetworkMetrics {
             bytesInPerSec: bytesInPerSec,
             bytesOutPerSec: bytesOutPerSec
         )
+    }
+
+    private func shouldFetchPublicIP(now: Date) -> Bool {
+        guard let lastFetch = lastPublicIPFetch else {
+            return true
+        }
+        return now.timeIntervalSince(lastFetch) >= publicIPFetchInterval
     }
 
     private func getLocalIP() -> String {

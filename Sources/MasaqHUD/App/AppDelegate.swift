@@ -240,31 +240,31 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateDisplay() {
         guard let metrics = metricsProvider, let window = overlayWindow else { return }
 
-        let temps = metrics.smcReader.getTemperatures()
-        let topProcesses = metrics.processMetrics.getTopProcesses(byCPU: 5, byMemory: 5)
+        autoreleasepool {
+            let temps = metrics.smcReader.getTemperatures()
+            let processResult = metrics.processMetrics.getTopProcessesAndCounts(byCPU: 5, byMemory: 5)
 
-        let processCounts = metrics.processMetrics.getProcessCounts()
+            var displayMetrics = DisplayMetrics()
+            displayMetrics.cpuUsage = metrics.cpuMetrics.getUsage()
+            displayMetrics.cpuTemp = temps.cpuTemp
+            displayMetrics.cpuFreqMHz = metrics.cpuMetrics.getFrequencyMHz()
+            displayMetrics.loadAverages = metrics.cpuMetrics.getLoadAverages()
+            displayMetrics.perCoreUsage = metrics.cpuMetrics.getPerCoreUsage()
+            displayMetrics.memoryUsage = metrics.memoryMetrics.getUsage()
+            displayMetrics.networkUsage = metrics.networkMetrics.getUsage()
+            displayMetrics.wifiInfo = metrics.networkMetrics.getWiFiInfo()
+            displayMetrics.diskUsage = metrics.diskMetrics.getUsage()
+            displayMetrics.dateTime = metrics.dateTimeMetrics.getInfo()
+            displayMetrics.gpuUsage = metrics.gpuMetrics.getUsage()
+            displayMetrics.topCPUProcesses = processResult.cpu
+            displayMetrics.topMemoryProcesses = processResult.memory
+            displayMetrics.processTotal = processResult.counts.total
+            displayMetrics.processRunning = processResult.counts.running
+            displayMetrics.batteryInfo = metrics.batteryMetrics.getInfo()
+            displayMetrics.audioInfo = metrics.audioMetrics.getInfo()
+            displayMetrics.bluetoothInfo = metrics.bluetoothMetrics.getInfo()
 
-        var displayMetrics = DisplayMetrics()
-        displayMetrics.cpuUsage = metrics.cpuMetrics.getUsage()
-        displayMetrics.cpuTemp = temps.cpuTemp
-        displayMetrics.cpuFreqMHz = metrics.cpuMetrics.getFrequencyMHz()
-        displayMetrics.loadAverages = metrics.cpuMetrics.getLoadAverages()
-        displayMetrics.perCoreUsage = metrics.cpuMetrics.getPerCoreUsage()
-        displayMetrics.memoryUsage = metrics.memoryMetrics.getUsage()
-        displayMetrics.networkUsage = metrics.networkMetrics.getUsage()
-        displayMetrics.wifiInfo = metrics.networkMetrics.getWiFiInfo()
-        displayMetrics.diskUsage = metrics.diskMetrics.getUsage()
-        displayMetrics.dateTime = metrics.dateTimeMetrics.getInfo()
-        displayMetrics.gpuUsage = metrics.gpuMetrics.getUsage()
-        displayMetrics.topCPUProcesses = topProcesses.cpu
-        displayMetrics.topMemoryProcesses = topProcesses.memory
-        displayMetrics.processTotal = processCounts.total
-        displayMetrics.processRunning = processCounts.running
-        displayMetrics.batteryInfo = metrics.batteryMetrics.getInfo()
-        displayMetrics.audioInfo = metrics.audioMetrics.getInfo()
-        displayMetrics.bluetoothInfo = metrics.bluetoothMetrics.getInfo()
-
-        window.overlayView.update(metrics: displayMetrics)
+            window.overlayView.update(metrics: displayMetrics)
+        }
     }
 }

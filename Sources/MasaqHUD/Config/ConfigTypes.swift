@@ -50,6 +50,7 @@ struct TextWidgetConfig {
     var opacity: Double?
     var shadow: ShadowConfig?
     var alignment: String?  // "left", "center", "right"
+    var maxWidth: Double?   // Max rendered width in points; longer text is truncated with an ellipsis
     var condition: String?  // JavaScript expression to evaluate for visibility
 }
 

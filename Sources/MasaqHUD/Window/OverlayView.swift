@@ -197,7 +197,8 @@ final class OverlayView: NSView {
                         italic: textConfig.italic,
                         opacity: opacity,
                         shadow: shadow,
-                        alignment: textConfig.alignment ?? "left"
+                        alignment: textConfig.alignment ?? "left",
+                        maxWidth: textConfig.maxWidth.map { CGFloat($0) }
                     )
 
                 case .graph(let graphConfig):

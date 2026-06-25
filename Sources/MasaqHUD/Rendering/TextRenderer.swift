@@ -100,7 +100,8 @@ final class TextRenderer {
         italic: Bool = false,
         opacity: CGFloat = 1.0,
         shadow: NSShadow? = nil,
-        alignment: String = "left"
+        alignment: String = "left",
+        maxWidth: CGFloat? = nil
     ) {
         // Use autoreleasepool to ensure immediate cleanup of temporary objects
         autoreleasepool {
@@ -118,7 +119,17 @@ final class TextRenderer {
             }
 
             let attributedString = NSAttributedString(string: text, attributes: attributes)
-            let line = CTLineCreateWithAttributedString(attributedString)
+            var line = CTLineCreateWithAttributedString(attributedString)
+
+            // Truncate with a trailing ellipsis if the text exceeds maxWidth.
+            if let maxWidth = maxWidth,
+               CTLineGetBoundsWithOptions(line, []).width > maxWidth {
+                let ellipsis = NSAttributedString(string: "\u{2026}", attributes: attributes)
+                let ellipsisToken = CTLineCreateWithAttributedString(ellipsis)
+                if let truncated = CTLineCreateTruncatedLine(line, Double(maxWidth), .end, ellipsisToken) {
+                    line = truncated
+                }
+            }
 
             // Calculate text width for alignment
             var adjustedX = x

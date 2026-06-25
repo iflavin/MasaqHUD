@@ -197,6 +197,7 @@ final class ConfigEngine {
             let opacity = options.forProperty("opacity")?.toDouble()
             let shadow = parseShadow(options.forProperty("shadow"))
             let alignment = optionalString(options.forProperty("align"))
+            let maxWidth = options.forProperty("maxWidth")?.toDouble()
             let condition = optionalString(options.forProperty("condition"))
             configData.widgets.append(.text(TextWidgetConfig(
                 text: text,
@@ -209,6 +210,7 @@ final class ConfigEngine {
                 opacity: opacity,
                 shadow: shadow,
                 alignment: alignment,
+                maxWidth: maxWidth,
                 condition: condition
             )))
 

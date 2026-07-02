@@ -31,11 +31,18 @@ struct ConfigValidator {
         return errors
     }
 
+    /// True when a value is finite and greater than zero.
+    /// Every comparison with NaN is false, so plain `<= 0` checks silently pass
+    /// non-finite values; positive-range validation must reject them explicitly.
+    private func isPositiveFinite(_ value: Double) -> Bool {
+        value.isFinite && value > 0
+    }
+
     private func validateGlobalSettings(_ config: HUDConfig) -> [ValidationError] {
         var errors: [ValidationError] = []
 
         // updateInterval
-        if config.updateInterval <= 0 {
+        if !isPositiveFinite(config.updateInterval) {
             errors.append(ValidationError(
                 path: "updateInterval",
                 message: "Must be greater than 0",
@@ -56,7 +63,7 @@ struct ConfigValidator {
         }
 
         // fontSize
-        if config.fontSize <= 0 {
+        if !isPositiveFinite(config.fontSize) {
             errors.append(ValidationError(
                 path: "fontSize",
                 message: "Must be greater than 0",
@@ -118,7 +125,7 @@ struct ConfigValidator {
         }
 
         // Font size
-        if let fontSize = config.fontSize, fontSize <= 0 {
+        if let fontSize = config.fontSize, !isPositiveFinite(fontSize) {
             errors.append(ValidationError(
                 path: "\(prefix).fontSize",
                 message: "Must be greater than 0",
@@ -156,7 +163,7 @@ struct ConfigValidator {
         }
 
         // Opacity
-        if let opacity = config.opacity, (opacity < 0 || opacity > 1) {
+        if let opacity = config.opacity, !opacity.isFinite || opacity < 0 || opacity > 1 {
             errors.append(ValidationError(
                 path: "\(prefix).opacity",
                 message: "Opacity must be between 0 and 1",
@@ -185,7 +192,7 @@ struct ConfigValidator {
         }
 
         // Size
-        if config.size.width <= 0 || config.size.height <= 0 {
+        if !isPositiveFinite(config.size.width) || !isPositiveFinite(config.size.height) {
             errors.append(ValidationError(
                 path: "\(prefix).size",
                 message: "Width and height must be greater than 0",
@@ -214,7 +221,7 @@ struct ConfigValidator {
         }
 
         // Dimensions
-        if config.width <= 0 {
+        if !isPositiveFinite(config.width) {
             errors.append(ValidationError(
                 path: "\(prefix).width",
                 message: "Width must be greater than 0",
@@ -222,7 +229,7 @@ struct ConfigValidator {
             ))
         }
 
-        if config.height <= 0 {
+        if !isPositiveFinite(config.height) {
             errors.append(ValidationError(
                 path: "\(prefix).height",
                 message: "Height must be greater than 0",
@@ -246,7 +253,7 @@ struct ConfigValidator {
         var errors: [ValidationError] = []
 
         // Width
-        if config.width <= 0 {
+        if !isPositiveFinite(config.width) {
             errors.append(ValidationError(
                 path: "\(prefix).width",
                 message: "Width must be greater than 0",
@@ -275,7 +282,7 @@ struct ConfigValidator {
         }
 
         // Radius
-        if config.radius <= 0 {
+        if !isPositiveFinite(config.radius) {
             errors.append(ValidationError(
                 path: "\(prefix).radius",
                 message: "Radius must be greater than 0",
@@ -284,7 +291,7 @@ struct ConfigValidator {
         }
 
         // Thickness
-        if config.thickness <= 0 {
+        if !isPositiveFinite(config.thickness) {
             errors.append(ValidationError(
                 path: "\(prefix).thickness",
                 message: "Thickness must be greater than 0",
@@ -336,7 +343,7 @@ struct ConfigValidator {
 
         // Size
         if let size = config.size {
-            if size.width <= 0 || size.height <= 0 {
+            if !isPositiveFinite(size.width) || !isPositiveFinite(size.height) {
                 errors.append(ValidationError(
                     path: "\(prefix).size",
                     message: "Width and height must be greater than 0",

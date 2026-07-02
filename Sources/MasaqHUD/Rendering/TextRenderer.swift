@@ -31,6 +31,11 @@ final class TextRenderer {
     // Font cache to avoid repeated allocations
     private var fontCache: [FontCacheKey: NSFont] = [:]
 
+    /// Number of cached fonts. Exposed for tests that guard against unbounded cache growth.
+    var fontCacheEntryCount: Int {
+        fontCache.count
+    }
+
     func clearCache() {
         fontCache.removeAll()
     }
@@ -43,6 +48,9 @@ final class TextRenderer {
     }
 
     private func getFont(fontName: String?, fontSize: CGFloat, weight: FontWeight, italic: Bool) -> NSFont {
+        // A non-finite size must never reach the cache key: NaN never compares equal
+        // to itself, so every lookup would miss and the cache would grow unboundedly.
+        let fontSize = fontSize.isFinite && fontSize > 0 ? fontSize : NSFont.systemFontSize
         let key = FontCacheKey(fontName: fontName, fontSize: fontSize, weight: weight, italic: italic)
 
         if let cached = fontCache[key] {

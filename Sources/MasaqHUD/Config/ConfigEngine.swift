@@ -115,8 +115,8 @@ final class ConfigEngine {
 
     private func parseGlobalConfig(_ options: JSValue) {
         if let position = options.forProperty("position"), !position.isUndefined {
-            let x = position.forProperty("x")?.toDouble() ?? 50
-            let y = position.forProperty("y")?.toDouble() ?? 100
+            let x = optionalNumber(position.forProperty("x")) ?? 50
+            let y = optionalNumber(position.forProperty("y")) ?? 100
             configData.position = CGPoint(x: x, y: y)
         }
 
@@ -124,16 +124,16 @@ final class ConfigEngine {
             configData.font = font.toString()
         }
 
-        if let fontSize = options.forProperty("fontSize"), fontSize.isNumber {
-            configData.fontSize = fontSize.toDouble()
+        if let fontSize = optionalNumber(options.forProperty("fontSize")) {
+            configData.fontSize = fontSize
         }
 
         if let color = options.forProperty("color"), color.isString {
             configData.color = color.toString()
         }
 
-        if let interval = options.forProperty("updateInterval"), interval.isNumber {
-            configData.updateInterval = interval.toDouble()
+        if let interval = optionalNumber(options.forProperty("updateInterval")) {
+            configData.updateInterval = interval
         }
 
         if let enablePublicIP = options.forProperty("enablePublicIP"), enablePublicIP.isBoolean {
@@ -183,7 +183,7 @@ final class ConfigEngine {
 
         let position = parsePoint(options.forProperty("position"))
         let color = optionalString(options.forProperty("color"))
-        let fontSize = options.forProperty("fontSize")?.toDouble()
+        let fontSize = optionalNumber(options.forProperty("fontSize"))
 
         switch type {
         case "text":
@@ -194,10 +194,10 @@ final class ConfigEngine {
             if weight == nil && (options.forProperty("bold")?.toBool() ?? false) {
                 weight = "bold"
             }
-            let opacity = options.forProperty("opacity")?.toDouble()
+            let opacity = optionalNumber(options.forProperty("opacity"))
             let shadow = parseShadow(options.forProperty("shadow"))
             let alignment = optionalString(options.forProperty("align"))
-            let maxWidth = options.forProperty("maxWidth")?.toDouble()
+            let maxWidth = optionalNumber(options.forProperty("maxWidth"))
             let condition = optionalString(options.forProperty("condition"))
             configData.widgets.append(.text(TextWidgetConfig(
                 text: text,
@@ -228,8 +228,8 @@ final class ConfigEngine {
 
         case "bar":
             let source = options.forProperty("source")?.toString() ?? ""
-            let width = options.forProperty("width")?.toDouble() ?? 100
-            let height = options.forProperty("height")?.toDouble() ?? 10
+            let width = optionalNumber(options.forProperty("width")) ?? 100
+            let height = optionalNumber(options.forProperty("height")) ?? 10
             let bgColor = optionalString(options.forProperty("backgroundColor"))
             let condition = optionalString(options.forProperty("condition"))
             configData.widgets.append(.bar(BarWidgetConfig(
@@ -243,7 +243,7 @@ final class ConfigEngine {
             )))
 
         case "hr":
-            let width = options.forProperty("width")?.toDouble() ?? 200
+            let width = optionalNumber(options.forProperty("width")) ?? 200
             let condition = optionalString(options.forProperty("condition"))
             configData.widgets.append(.hr(HRWidgetConfig(
                 position: position,
@@ -254,11 +254,11 @@ final class ConfigEngine {
 
         case "gauge":
             let source = options.forProperty("source")?.toString() ?? ""
-            let radius = options.forProperty("radius")?.toDouble() ?? 40
-            let thickness = options.forProperty("thickness")?.toDouble() ?? 8
+            let radius = optionalNumber(options.forProperty("radius")) ?? 40
+            let thickness = optionalNumber(options.forProperty("thickness")) ?? 8
             let bgColor = optionalString(options.forProperty("backgroundColor"))
-            let startAngle = options.forProperty("startAngle")?.toDouble() ?? 135
-            let endAngle = options.forProperty("endAngle")?.toDouble() ?? 405
+            let startAngle = optionalNumber(options.forProperty("startAngle")) ?? 135
+            let endAngle = optionalNumber(options.forProperty("endAngle")) ?? 405
             let condition = optionalString(options.forProperty("condition"))
             configData.widgets.append(.gauge(GaugeWidgetConfig(
                 source: source,
@@ -292,8 +292,8 @@ final class ConfigEngine {
         guard let value = value, !value.isUndefined, !value.isNull else {
             return .zero
         }
-        let x = value.forProperty("x")?.toDouble() ?? 0
-        let y = value.forProperty("y")?.toDouble() ?? 0
+        let x = optionalNumber(value.forProperty("x")) ?? 0
+        let y = optionalNumber(value.forProperty("y")) ?? 0
         return CGPoint(x: x, y: y)
     }
 
@@ -301,8 +301,8 @@ final class ConfigEngine {
         guard let value = value, !value.isUndefined, !value.isNull else {
             return nil
         }
-        let width = value.forProperty("width")?.toDouble() ?? 0
-        let height = value.forProperty("height")?.toDouble() ?? 0
+        let width = optionalNumber(value.forProperty("width")) ?? 0
+        let height = optionalNumber(value.forProperty("height")) ?? 0
         return CGSize(width: width, height: height)
     }
 
@@ -311,10 +311,22 @@ final class ConfigEngine {
             return nil
         }
         let color = value.forProperty("color")?.toString() ?? "#000000"
-        let offsetX = value.forProperty("offsetX")?.toDouble() ?? 1
-        let offsetY = value.forProperty("offsetY")?.toDouble() ?? 1
-        let blur = value.forProperty("blur")?.toDouble() ?? 2
+        let offsetX = optionalNumber(value.forProperty("offsetX")) ?? 1
+        let offsetY = optionalNumber(value.forProperty("offsetY")) ?? 1
+        let blur = optionalNumber(value.forProperty("blur")) ?? 2
         return ShadowConfig(color: color, offsetX: offsetX, offsetY: offsetY, blur: blur)
+    }
+
+    /// Safely extract an optional finite Double from a JSValue.
+    /// JSValue.toDouble() returns NaN for undefined, null, and non-numeric values,
+    /// and NaN never compares equal to itself, so it must not escape into config
+    /// values (it defeats `?? default` fallbacks and poisons caches keyed on it).
+    private func optionalNumber(_ value: JSValue?) -> Double? {
+        guard let value = value, value.isNumber else {
+            return nil
+        }
+        let number = value.toDouble()
+        return number.isFinite ? number : nil
     }
 
     /// Safely extract an optional String from a JSValue, returning nil for undefined/null

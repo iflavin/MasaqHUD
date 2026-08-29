@@ -1,5 +1,7 @@
 # MasaqHUD
 
+[![CI](https://github.com/iflavin/MasaqHUD/actions/workflows/ci.yml/badge.svg)](https://github.com/iflavin/MasaqHUD/actions/workflows/ci.yml)
+
 MasaqHUD is a lightweight, scriptable desktop heads-up display for macOS.
 
 It provides a configurable overlay inspired by Conky, designed specifically for macOS users (power/casual users alike) with configuration expressed as code. MasaqHUD runs quietly in the background, stays out of the way, and presents information in a form that is precise, composable, and predictable.

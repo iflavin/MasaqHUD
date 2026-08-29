@@ -17,9 +17,9 @@ This is a living document. See [Contributing](#contributing-to-the-roadmap) for 
 
 ---
 
-## Current Release: v0.5.6
+## Current Release: v0.6.0
 
-MasaqHUD v0.5.6 is a feature-complete beta providing a scriptable desktop overlay for macOS.
+MasaqHUD v0.6.0 is a feature-complete beta providing a scriptable desktop overlay for macOS.
 
 ### Implemented
 

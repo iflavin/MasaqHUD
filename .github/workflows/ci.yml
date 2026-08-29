@@ -5,13 +5,15 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # Lets the release workflow reuse this exact verification matrix.
+  workflow_call:
   workflow_dispatch:
 
-# Superseded runs on the same branch are cancelled; main is exempt so every
-# merged commit keeps a completed status.
+# Only superseded pull request runs are cancelled. Runs on main and on release
+# tags always finish, so every merged commit and every tag keeps a real status.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

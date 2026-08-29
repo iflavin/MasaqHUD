@@ -85,7 +85,7 @@ Establish the infrastructure for a sustainable open-source project.
 - [x] **Documentation** - User guide, widget examples, variable reference in `docs/`
 - [x] **Automated tests** - Unit tests for formatting, validation, variable expansion, metrics (requires Xcode)
 - [x] **CI pipeline** - Build verification on PRs
-- [ ] **Release automation** - Tagged releases with changelogs
+- [x] **Release automation** - Tagged releases with changelogs
 
 ---
 

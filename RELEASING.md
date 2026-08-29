@@ -3,9 +3,10 @@
 ## Pre-release Checklist
 
 1. Update version in `Sources/MasaqHUD/Version.swift`
-2. Commit the version bump:
+2. Update the `## Current Release:` heading and the sentence below it in `ROADMAP.md`
+3. Commit the version bump:
    ```sh
-   git add Sources/MasaqHUD/Version.swift
+   git add Sources/MasaqHUD/Version.swift ROADMAP.md
    git commit -m "Bump version to X.Y.Z"
    ```
 

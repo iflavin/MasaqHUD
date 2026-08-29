@@ -1,2 +1,2 @@
 // MasaqHUD Version - update before each release
-public let appVersion = "0.5.6"
+public let appVersion = "0.6.0"

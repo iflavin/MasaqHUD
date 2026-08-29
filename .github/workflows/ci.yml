@@ -27,9 +27,12 @@ jobs:
       # first failure; a version-specific break is the point of the matrix.
       fail-fast: false
       matrix:
-        # Both are Apple Silicon. macos-15 pairs with Xcode 16.x, macos-26
-        # with Xcode 26.x, so the matrix covers two Swift toolchains.
-        runner: [macos-15, macos-26]
+        # All Apple Silicon, spanning the supported macOS range: macos-14 is
+        # the floor (Xcode 15.x), macos-26 the newest (Xcode 26.x), with
+        # macos-15 (Xcode 16.x) between them. The package is installed via a
+        # Homebrew formula that builds from source, so it must compile on every
+        # toolchain a supported user might have, not just the newest.
+        runner: [macos-14, macos-15, macos-26]
 
     steps:
       - name: Check out repository

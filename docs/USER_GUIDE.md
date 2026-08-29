@@ -24,7 +24,7 @@ A comprehensive reference for creating custom overlay configurations.
 MasaqHUD is a native macOS desktop overlay that displays system metrics as a transparent window. Configuration is done via JavaScript files that are hot-reloaded when saved.
 
 **Key characteristics:**
-- macOS 13.0+ (Ventura) on Apple Silicon
+- macOS 14.0+ (Sonoma) on Apple Silicon
 - Zero external dependencies
 - Hot-reloading configuration
 - Fully scriptable via JavaScript

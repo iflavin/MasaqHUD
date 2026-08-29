@@ -12,7 +12,7 @@ MasaqHUD is a display layer. It observes and renders information; it does not ma
 
 ## Requirements
 
-- macOS 13.0 (Ventura) or later
+- macOS 14.0 (Sonoma) or later
 - Apple Silicon Mac (M1, M2, M3, or later)
 
 ---

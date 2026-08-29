@@ -1,0 +1,115 @@
+name: Release
+
+# Publishes a GitHub release when a version tag is pushed. The tag is the
+# trigger, so cutting a release stays a deliberate act; everything after it
+# is automated. See RELEASING.md.
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: write
+
+jobs:
+  verify-version:
+    name: Verify version consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Check the tag matches every declared version
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME#v}"
+          source_version="$(sed -n 's/.*appVersion = "\(.*\)".*/\1/p' Sources/MasaqHUD/Version.swift)"
+          roadmap_version="$(sed -n 's/^## Current Release: v\(.*\)$/\1/p' ROADMAP.md)"
+
+          echo "tag:            $tag"
+          echo "Version.swift:  ${source_version:-<not found>}"
+          echo "ROADMAP.md:     ${roadmap_version:-<not found>}"
+
+          mismatch=0
+          if [ "$tag" != "$source_version" ]; then
+            echo "::error::Tag v${tag} does not match appVersion \"${source_version}\" in Sources/MasaqHUD/Version.swift"
+            mismatch=1
+          fi
+          if [ "$tag" != "$roadmap_version" ]; then
+            echo "::error::Tag v${tag} does not match '## Current Release: v${roadmap_version}' in ROADMAP.md"
+            mismatch=1
+          fi
+
+          if [ "$mismatch" -ne 0 ]; then
+            echo "::error::Nothing was published. Delete the tag, correct the version declarations, and re-tag. See RELEASING.md."
+            exit 1
+          fi
+
+          echo "All version declarations agree on ${tag}."
+
+  build-and-test:
+    name: Verify build
+    # Reuses the pull request matrix, so a release is held to the same
+    # three-toolchain standard as any other change.
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish GitHub release
+    needs: [verify-version, build-and-test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          # Full history so the generated notes can diff against the last tag.
+          fetch-depth: 0
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag
+
+      - name: Report the Homebrew formula values
+        run: |
+          set -euo pipefail
+
+          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz"
+
+          sha=""
+          for attempt in 1 2 3; do
+            if sha="$(curl -fsSL "$url" | sha256sum | cut -d ' ' -f 1)"; then
+              break
+            fi
+            echo "Attempt ${attempt} to download the source tarball failed; retrying in 5s."
+            sha=""
+            sleep 5
+          done
+
+          if [ -z "$sha" ]; then
+            echo "::error::Could not download ${url} to compute its checksum. Compute it manually; see RELEASING.md."
+            exit 1
+          fi
+
+          {
+            echo "## Homebrew formula update"
+            echo
+            echo "The tap is a separate repository and is **not** updated automatically."
+            echo "Update \`iflavin/homebrew-masaqhud\` with:"
+            echo
+            echo '```ruby'
+            echo "  url \"${url}\""
+            echo "  sha256 \"${sha}\""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "url:    ${url}"
+          echo "sha256: ${sha}"
